@@ -96,7 +96,7 @@ func (b *AutoscalerBuilder) buildProvisioningRequest(
 	scaleUpOrchestrator := provreqorchestrator.NewWrapperOrchestrator(provreqOrchestrator)
 	opts.ScaleUpOrchestrator = scaleUpOrchestrator
 	provreqProcesor := provreq.NewProvReqProcessor(client, opts.CheckCapacityProcessorInstance)
-	opts.LoopStartNotifier = loopstart.NewObserversList([]loopstart.Observer{provreqProcesor})
+	opts.LoopStartNotifier = loopstart.NewObserversList([]loopstart.Observer{provreqProcesor, opts.ScaleUpFailuresRegistry})
 
 	podListProcessor.AddProcessor(provreqProcesor)
 

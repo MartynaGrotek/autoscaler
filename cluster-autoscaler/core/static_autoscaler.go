@@ -25,6 +25,7 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/capacitybuffer/fakepods"
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider"
 	"k8s.io/autoscaler/cluster-autoscaler/clusterstate"
+	"k8s.io/autoscaler/cluster-autoscaler/clusterstate/scaleupfailures"
 	"k8s.io/autoscaler/cluster-autoscaler/clusterstate/utils"
 	"k8s.io/autoscaler/cluster-autoscaler/config"
 	ca_context "k8s.io/autoscaler/cluster-autoscaler/context"
@@ -143,6 +144,7 @@ func NewStaticAutoscaler(
 	expanderStrategy expander.Strategy,
 	estimatorBuilder estimator.EstimatorBuilder,
 	backoff backoff.Backoff,
+	scaleUpFailuresRegistry *scaleupfailures.Registry,
 	debuggingSnapshotter debuggingsnapshot.DebuggingSnapshotter,
 	remainingPdbTracker pdb.RemainingPdbTracker,
 	scaleUpOrchestrator scaleup.Orchestrator,
@@ -155,14 +157,14 @@ func NewStaticAutoscaler(
 
 	klog.V(4).Infof("Creating new static autoscaler with opts: %v", opts)
 
+	templateNodeInfoRegistry := nodeinfosprovider.NewTemplateNodeInfoRegistry(processors.TemplateNodeInfoProvider)
+
 	clusterStateConfig := clusterstate.ClusterStateRegistryConfig{
 		MaxTotalUnreadyPercentage: opts.MaxTotalUnreadyPercentage,
 		OkTotalUnreadyCount:       opts.OkTotalUnreadyCount,
 	}
-	clusterStateRegistry := clusterstate.NewClusterStateRegistry(cloudProvider, clusterStateConfig, autoscalingKubeClients.LogRecorder, backoff, processors.NodeGroupConfigProcessor, processors.AsyncNodeGroupStateChecker)
+	clusterStateRegistry := clusterstate.NewClusterStateRegistry(cloudProvider, autoscalingKubeClients.LogRecorder, backoff, processors.NodeGroupConfigProcessor, templateNodeInfoRegistry, clusterstate.WithScaleUpFailuresRegistry(scaleUpFailuresRegistry), clusterstate.WithConfig(clusterStateConfig), clusterstate.WithAsyncNodeGroupStateChecker(processors.AsyncNodeGroupStateChecker))
 	processorCallbacks := newStaticAutoscalerProcessorCallbacks()
-
-	templateNodeInfoRegistry := nodeinfosprovider.NewTemplateNodeInfoRegistry(processors.TemplateNodeInfoProvider)
 
 	autoscalingCtx := ca_context.NewAutoscalingContext(
 		opts,
@@ -180,6 +182,9 @@ func NewStaticAutoscaler(
 		csiProvider)
 
 	taintConfig := taints.NewTaintConfig(opts)
+
+	// TODO(autoscaler/issues/9642): Register ScaleUpFailuresRegistry to processors.ScaleStateNotifier before ClusterStateRegistry
+	// and remove manual updates from ClusterStateRegistry.RegisterFailedScaleUp method.
 	processors.ScaleDownCandidatesNotifier.Register(clusterStateRegistry)
 	processors.ScaleStateNotifier.Register(clusterStateRegistry)
 
@@ -283,7 +288,6 @@ func (a *StaticAutoscaler) initializeRemainingPdbTracker() caerrors.AutoscalerEr
 func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerError {
 	a.cleanUpIfRequired()
 	a.processorCallbacks.reset()
-	a.clusterStateRegistry.PeriodicCleanup()
 	a.DebuggingSnapshotter.StartDataCollection()
 	defer a.DebuggingSnapshotter.Flush()
 	if a.capacityBufferPodsRegistry != nil {

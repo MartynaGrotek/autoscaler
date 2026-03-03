@@ -76,6 +76,7 @@ func NewAutoscaler(ctx context.Context, opts coreoptions.AutoscalerOptions, info
 		opts.ExpanderStrategy,
 		opts.EstimatorBuilder,
 		opts.Backoff,
+		opts.ScaleUpFailuresRegistry,
 		opts.DebuggingSnapshotter,
 		opts.RemainingPdbTracker,
 		opts.ScaleUpOrchestrator,
@@ -94,7 +95,7 @@ func initializeDefaultOptions(ctx context.Context, opts *coreoptions.AutoscalerO
 		opts.Processors = ca_processors.DefaultProcessors(opts.AutoscalingOptions)
 	}
 	if opts.LoopStartNotifier == nil {
-		opts.LoopStartNotifier = loopstart.NewObserversList(nil)
+		opts.LoopStartNotifier = loopstart.NewObserversList([]loopstart.Observer{opts.ScaleUpFailuresRegistry})
 	}
 	if opts.AutoscalingKubeClients == nil {
 		opts.AutoscalingKubeClients = ca_context.NewAutoscalingKubeClients(ctx, opts.AutoscalingOptions, opts.KubeClient, opts.InformerFactory)

@@ -27,6 +27,7 @@ import (
 	cbctrl "k8s.io/autoscaler/cluster-autoscaler/capacitybuffer/controller"
 	"k8s.io/autoscaler/cluster-autoscaler/capacitybuffer/fakepods"
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider"
+	"k8s.io/autoscaler/cluster-autoscaler/clusterstate/scaleupfailures"
 	"k8s.io/autoscaler/cluster-autoscaler/config"
 	cacontext "k8s.io/autoscaler/cluster-autoscaler/context"
 	"k8s.io/autoscaler/cluster-autoscaler/core"
@@ -177,6 +178,8 @@ func (b *AutoscalerBuilder) Build(ctx context.Context) (core.Autoscaler, *loop.L
 	opts.Processors = ca_processors.DefaultProcessors(autoscalingOptions)
 	opts.Processors.TemplateNodeInfoProvider = nodeinfosprovider.NewDefaultTemplateNodeInfoProvider(&autoscalingOptions.NodeInfoCacheExpireTime, autoscalingOptions.ForceDaemonSets)
 	podListProcessor := podlistprocessor.NewDefaultPodListProcessor(scheduling.ScheduleAnywhere)
+
+	opts.ScaleUpFailuresRegistry = scaleupfailures.NewRegistry()
 
 	var provisioningRequestInjector *provreq.ProvisioningRequestPodsInjector
 	if autoscalingOptions.ProvisioningRequestEnabled {
